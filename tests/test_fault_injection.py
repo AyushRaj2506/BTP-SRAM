@@ -31,6 +31,7 @@ from fault_injection import inject_resistive_open, inject_bridging_fault, inject
 
 HEALTHY_CORE = Path(__file__).parent.parent / "circuits" / "core" / "cell_core_healthy.net"
 GENERATED = Path(__file__).parent.parent / "data" / "generated_netlists"
+GENERATED.mkdir(parents=True, exist_ok=True)
 
 
 def _healthy_lines():

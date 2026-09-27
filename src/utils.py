@@ -51,4 +51,5 @@ def save_cell_core(lines: List[str], path: str) -> None:
         Destination file path.  Parent directories must already exist.
     """
     p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")
