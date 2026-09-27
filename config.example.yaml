@@ -1,0 +1,17 @@
+# config.example.yaml — template for config.yaml
+#
+# Copy this file to config.yaml (which is gitignored) and fill in the
+# machine-specific values.  Do NOT commit config.yaml — each teammate
+# keeps their own local copy.
+#
+# On first run, simulation_runner.py will attempt to auto-detect LTspice
+# and write its path here automatically.  You only need to fill this in
+# manually if auto-detection fails on your machine.
+#
+# Common locations:
+#   LTspice 24 (default C: install):  C:\Program Files\ADI\LTspice\LTspice.exe
+#   LTspice 24 (D: drive):            D:\LTspice\LTspice.exe
+#   LTspice XVII (default C:):        C:\Program Files\LTC\LTspiceXVII\XVIIx64.exe
+#   Per-user install (AppData):       C:\Users\<name>\AppData\Local\Programs\ADI\LTspice\LTspice.exe
+
+ltspice_path: null

@@ -1,0 +1,6 @@
+V4 Vdd 0 1V
+V2 WL 0 PULSE(0 1 2n 0.1n 0.1n 5n 20n)
+Cbl BL 0 20fF IC=1
+Cblb BLB 0 20fF IC=1
+.tran 0 20n 0 10p uic
+.ic V(Q)=0V V(Qb)=1V V(BL)=1V V(BLB)=1V

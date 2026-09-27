@@ -1,0 +1,34 @@
+# btp-sram-fault-diagnosis .gitignore
+
+# ---- Machine-specific config (ltspice_path differs per machine) ----
+config.yaml
+
+# ---- Generated simulation outputs (large binary waveforms, logs) ----
+*.raw
+*.log
+data/generated_netlists/
+data/raw_sim/
+data/pilot_batch/raw/
+data/pilot_batch/logs/
+data/pilot_batch/extended/*/raw/
+data/pilot_batch/extended/*/logs/
+data/demo_features/
+
+# ---- Python cache ----
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+.DS_Store
+
+# ---- Distribution / packaging ----
+*.egg-info/
+dist/
+build/

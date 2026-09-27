@@ -1,0 +1,21 @@
+* SRAM 6T cell testbench: core_bridging_2000ohm + write stimulus
+M1 Qb Q Vdd Vdd SRAM_PMOS l=180nm w=360nm
+M2 Q Qb Vdd Vdd SRAM_PMOS l=180nm w=360nm
+M3 Q Qb 0 0 SRAM_NMOS l=180nm w=720nm
+M4 Qb Q 0 0 SRAM_NMOS l=180nm w=720nm
+M5 Q WL BL 0 SRAM_NMOS l=180nm w=540nm
+M6 BLB WL Qb 0 SRAM_NMOS l=180nm w=540nm
+Cq  Qb 0 1fF
+Cqb Q  0 1fF
+.model NMOS NMOS
+.model PMOS PMOS
+.model SRAM_NMOS NMOS (LEVEL=1 VTO=0.45 KP=250u GAMMA=0.4 LAMBDA=0.08 PHI=0.7 TOX=4n)
+.model SRAM_PMOS PMOS (LEVEL=1 VTO=-0.45 KP=100u GAMMA=0.4 LAMBDA=0.1 PHI=0.7 TOX=4n)
+Rbridge Q Qb 2000
+V4 Vdd 0 1V
+V2 WL 0 PULSE(0 1 2n 0.1n 0.1n 5n 20n)
+V1 BL 0 1V
+V3 BLB 0 0V
+.tran 0 20n 0 10p uic
+.ic V(Q)=0V V(Qb)=1V
+.end

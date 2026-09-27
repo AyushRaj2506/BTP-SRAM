@@ -1,0 +1,6 @@
+V4 Vdd 0 1V
+V2 WL 0 0V
+V1 BL 0 1V
+V3 BLB 0 1V
+.tran 0 20n 0 10p uic
+.ic V(Q)=1V V(Qb)=0V

@@ -1,0 +1,6 @@
+V4 Vdd 0 1V
+V2 WL 0 PULSE(0 1 2n 0.1n 0.1n 5n 20n)
+V1 BL 0 1V
+V3 BLB 0 0V
+.tran 0 20n 0 10p uic
+.ic V(Q)=0V V(Qb)=1V
