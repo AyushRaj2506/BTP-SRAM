@@ -138,12 +138,13 @@ class TestGateNeverEqualsDrain:
 
 class TestNodeMappingPreserved:
     """
-    M5 drain must be 'Q'; M6 drain must be 'BLB'.
+    M5 drain must be 'Q'; M6 drain must be 'Qb'.
     M5 source must be 'BL' unless a resistive-open on M5 renamed it to 'BL_r'
     (in which case verify the drain side is still 'Q').
-    M6 source must be 'Qb' unless a resistive-open on M6 renamed it to 'Qb_r'.
+    M6 source must be 'BLB' unless a resistive-open on M6 renamed it to 'BLB_r'
+    (in which case verify the drain side is still 'Qb').
 
-    This catches reintroduction of the swapped-node bug found multiple times.
+    Both access transistors are symmetric: drain = storage node, source = bitline.
     """
 
     def _find_transistor(self, lines, tname):
@@ -164,9 +165,9 @@ class TestNodeMappingPreserved:
         _, m5_drain, _, m5_source, _, _ = m5
         _, m6_drain, _, m6_source, _, _ = m6
 
-        # Drains are always fixed regardless of fault type
-        assert m5_drain == "Q",   f"[{label}] M5 drain should be 'Q', got '{m5_drain}'"
-        assert m6_drain == "BLB", f"[{label}] M6 drain should be 'BLB', got '{m6_drain}'"
+        # Drains are always fixed to storage nodes regardless of fault type
+        assert m5_drain == "Q",  f"[{label}] M5 drain should be 'Q', got '{m5_drain}'"
+        assert m6_drain == "Qb", f"[{label}] M6 drain should be 'Qb', got '{m6_drain}'"
 
         # Sources: check exact value if specified
         if m5_source_exact is not None:
@@ -180,7 +181,7 @@ class TestNodeMappingPreserved:
 
     def test_healthy(self):
         v = _make_all_variants()
-        self._check_mapping(v["healthy"], "healthy", "BL", "Qb")
+        self._check_mapping(v["healthy"], "healthy", "BL", "BLB")
 
     def test_resistive_open_M5_source_renamed(self):
         """
@@ -189,19 +190,31 @@ class TestNodeMappingPreserved:
         """
         v = _make_all_variants()
         self._check_mapping(v["resistive_open_M5"], "resistive_open_M5",
-                            m5_source_exact="BL_r", m6_source_exact="Qb")
+                            m5_source_exact="BL_r", m6_source_exact="BLB")
+
+    def test_resistive_open_M6_source_renamed(self):
+        """
+        inject_resistive_open on M6 renames M6's source BLB→BLB_r.
+        Drain should still be 'Qb'; M5 should be completely unmodified.
+        """
+        lines = _healthy_lines()
+        m6_path = str(GENERATED / "test_ro_M6_1000.net")
+        inject_resistive_open(list(lines), "M6", 1000, m6_path)
+        m6_lines = load_cell_core(m6_path)
+        self._check_mapping(m6_lines, "resistive_open_M6",
+                            m5_source_exact="BL", m6_source_exact="BLB_r")
 
     def test_bridging(self):
         v = _make_all_variants()
-        self._check_mapping(v["bridging_2000"], "bridging_2000", "BL", "Qb")
+        self._check_mapping(v["bridging_2000"], "bridging_2000", "BL", "BLB")
 
     def test_vth_drift_storage_pair(self):
         v = _make_all_variants()
-        self._check_mapping(v["vth_drift_storage_pair"], "vth_drift_storage_pair", "BL", "Qb")
+        self._check_mapping(v["vth_drift_storage_pair"], "vth_drift_storage_pair", "BL", "BLB")
 
     def test_vth_drift_access(self):
         v = _make_all_variants()
-        self._check_mapping(v["vth_drift_access"], "vth_drift_access", "BL", "Qb")
+        self._check_mapping(v["vth_drift_access"], "vth_drift_access", "BL", "BLB")
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +300,25 @@ class TestFaultNetlistDiffersMinimally:
         # No deletions
         assert len(deleted) == 0, f"resistive_open_M5: unexpected deletions: {deleted}"
 
+    def test_resistive_open_M6_minimal_diff(self):
+        lines = _healthy_lines()
+        m6_path = str(GENERATED / "test_ro_M6_1000.net")
+        inject_resistive_open(list(lines), "M6", 1000, m6_path)
+        faulty = load_cell_core(m6_path)
+
+        replaced, inserted, deleted = self._lines_changed(lines, faulty)
+
+        # Exactly one line should be replaced: M6 line (source BLB→BLB_r)
+        assert len(replaced) == 1, f"resistive_open_M6: expected 1 replaced line, got {len(replaced)}"
+        hi, fi = replaced[0]
+        assert hi == 5, f"resistive_open_M6: replaced healthy line index should be 5 (M6), got {hi}"
+        assert "BLB_r" in faulty[fi]
+
+        # Exactly one new line inserted: Rfault resistor
+        assert len(inserted) == 1
+        assert "Rfault" in inserted[0] and "BLB" in inserted[0] and "BLB_r" in inserted[0]
+        assert len(deleted) == 0
+
     def test_bridging_fault_minimal_diff(self):
         v = _make_all_variants()
         healthy = v["healthy"]
@@ -314,22 +346,21 @@ class TestFaultNetlistDiffersMinimally:
 
         replaced, inserted, deleted = self._lines_changed(healthy, faulty)
 
-        # Exactly two lines should be replaced: the two .model lines for SRAM_NMOS and SRAM_PMOS
-        assert len(replaced) == 2, (
-            f"vth_drift_storage_pair: expected 2 replaced lines (the two .model lines), "
+        # M1–M4 lines replaced with drifted models
+        assert len(replaced) == 4, (
+            f"vth_drift_storage_pair: expected 4 replaced lines (M1-M4), "
             f"got {len(replaced)}: {[(healthy[hi], faulty[fi]) for hi, fi in replaced]}"
         )
-        for hi, _ in replaced:
-            assert healthy[hi].startswith(".model SRAM_"), (
-                f"vth_drift_storage_pair: replaced line should be an SRAM .model line, got: {healthy[hi]!r}"
-            )
-        assert len(inserted) == 0, f"vth_drift_storage_pair: unexpected insertions: {inserted}"
-        assert len(deleted) == 0, f"vth_drift_storage_pair: unexpected deletions: {deleted}"
+        replaced_devs = [healthy[hi].split()[0].upper() for hi, _ in replaced]
+        assert set(replaced_devs) == {"M1", "M2", "M3", "M4"}
 
-        # VTO in both replaced .model lines should have changed
-        for hi, fi in replaced:
-            assert "VTO=" in faulty[fi], f"Replaced .model line missing VTO=: {faulty[fi]!r}"
-            assert faulty[fi] != healthy[hi], f"Replaced line is identical to original: {faulty[fi]!r}"
+        # Two new model lines inserted
+        assert len(inserted) == 2
+        inserted_models = [l for l in inserted if l.startswith(".model")]
+        assert len(inserted_models) == 2
+        assert any("SRAM_NMOS_STORAGE_DRIFT" in l for l in inserted_models)
+        assert any("SRAM_PMOS_STORAGE_DRIFT" in l for l in inserted_models)
+        assert len(deleted) == 0
 
     def test_vth_drift_access_minimal_diff(self):
         v = _make_all_variants()
@@ -364,3 +395,45 @@ class TestFaultNetlistDiffersMinimally:
         assert "VTO=0.495" in drift_model_lines[0], (
             f"vth_drift_access: drifted model VTO should be 0.495, got: {drift_model_lines[0]!r}"
         )
+
+    def test_vth_drift_storage_pair_isolation(self):
+        """
+        Verify that in vth_drift_storage_pair, M5 and M6 remain on the nominal
+        SRAM_NMOS model, while M1-M4 point at drifted models.
+        """
+        v = _make_all_variants()
+        lines = v["vth_drift_storage_pair"]
+
+        def _get_model(dev_name):
+            for l in lines:
+                p = _parse_m_line(l)
+                if p and p[0].upper() == dev_name.upper():
+                    return p[5]
+            return None
+
+        assert _get_model("M5") == "SRAM_NMOS", f"M5 model was modified: {_get_model('M5')}"
+        assert _get_model("M6") == "SRAM_NMOS", f"M6 model was modified: {_get_model('M6')}"
+        assert _get_model("M1") == "SRAM_PMOS_STORAGE_DRIFT"
+        assert _get_model("M2") == "SRAM_PMOS_STORAGE_DRIFT"
+        assert _get_model("M3") == "SRAM_NMOS_STORAGE_DRIFT"
+        assert _get_model("M4") == "SRAM_NMOS_STORAGE_DRIFT"
+
+    def test_resistive_open_symmetric_placement(self):
+        """
+        Verify that resistive opens on both M5 and M6 land on the bitline side
+        (BL for M5, BLB for M6).
+        """
+        lines = _healthy_lines()
+        p_m5 = str(GENERATED / "test_ro_M5_sym.net")
+        p_m6 = str(GENERATED / "test_ro_M6_sym.net")
+        inject_resistive_open(list(lines), "M5", 1000, p_m5)
+        inject_resistive_open(list(lines), "M6", 1000, p_m6)
+
+        m5_lines = load_cell_core(p_m5)
+        m6_lines = load_cell_core(p_m6)
+
+        r_m5 = [l for l in m5_lines if l.startswith("Rfault")]
+        r_m6 = [l for l in m6_lines if l.startswith("Rfault")]
+
+        assert len(r_m5) == 1 and "BL" in r_m5[0] and "BL_r" in r_m5[0]
+        assert len(r_m6) == 1 and "BLB" in r_m6[0] and "BLB_r" in r_m6[0]

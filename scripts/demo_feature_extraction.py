@@ -148,7 +148,7 @@ def run_experiment():
 
     print("\n" + "=" * 105)
     print("Diagnostic Differentiation Confirmation:")
-    print("  - Bridging 2000ohm:           Distinguished in HOLD by I_ddq >> 200 uA (vs 0.0 uA) & collapse to 0.48V.")
+    print("  - Bridging 2000ohm:           Distinguished in HOLD by I_ddq = 4.34 uA (>1000x jump vs 0.004 uA baseline) & collapse to 0.48V.")
     print("  - Resistive Open M5 1000ohm:  Distinguished in WRITE_0 by t_write delay penalty & asymmetry.")
     print("  - Vth Drift Storage Pair 10%: Distinguished by lower read bump margin and symmetric write delay shift.")
     print("  - Vth Drift Access 10%:       Distinguished in READ by slower sense delay t_sense (bitline discharge).")

@@ -280,51 +280,86 @@ def run_simulation(
     # Build a simulator class from the resolved executable path
     simulator_cls = LTspiceSim.create_from(ltspice_exe)
 
-    runner = SimRunner(
-        output_folder=str(raw_output_dir),
-        simulator=simulator_cls,
-        verbose=False,
-    )
+    # Ensure netlist exists in raw_output_dir as {stem}.net
+    run_net = raw_output_dir / f"{stem}.net"
+    if Path(net_path).resolve() != run_net.resolve():
+        shutil.copy2(str(net_path), str(run_net))
 
-    # run_now() blocks until completion and returns (raw_path, log_path) as
-    # pathlib.Path objects (or None on crash).
-    result_raw, result_log = runner.run_now(
-        SpiceEditor(net_path),
-        run_filename=f"{stem}.net",
-    )
+    # Direct headless LTspice execution (thread-safe, zero internal runner collisions)
+    simulator_cls.run(run_net)
 
-    # Normalise to strings; fall back to constructed paths if LTspice crashed
-    raw_path = str(result_raw) if result_raw is not None else str(raw_output_dir / f"{stem}.raw")
-    log_path = str(result_log) if result_log is not None else str(raw_output_dir / f"{stem}.log")
+    raw_file = raw_output_dir / f"{stem}.raw"
+    gen_log_file = raw_output_dir / f"{stem}.log"
+    target_log_file = log_output_dir / f"{stem}.log"
 
-    # Copy .log to log_output_dir if it was written elsewhere
-    result_log_path = Path(log_path)
-    target_log_path = log_output_dir / result_log_path.name
-    if result_log_path.exists() and result_log_path.parent != log_output_dir:
-        shutil.copy2(str(result_log_path), str(target_log_path))
-        log_path = str(target_log_path)
+    if gen_log_file.exists():
+        if gen_log_file.resolve() != target_log_file.resolve():
+            shutil.copy2(str(gen_log_file), str(target_log_file))
+        log_path = str(target_log_file)
+    else:
+        log_path = str(target_log_file)
+
+    raw_path = str(raw_file)
 
     # -----------------------------------------------------------------------
-    # Read log text
+    # Validate output files and read log text
     # -----------------------------------------------------------------------
     log_text = ""
-    for candidate_log in (Path(log_path), result_log_path):
-        if candidate_log.exists():
-            log_text = candidate_log.read_text(encoding="utf-8", errors="replace")
-            log_path = str(candidate_log)
-            break
+    log_obj = Path(log_path)
+    if log_obj.exists():
+        log_text = log_obj.read_text(encoding="utf-8", errors="replace")
 
     # -----------------------------------------------------------------------
-    # Parse convergence markers
+    # Parse convergence and simulation failure markers
     # -----------------------------------------------------------------------
     converged = True
     warning = None
-    log_lower = log_text.lower()
-    for marker in _CONVERGENCE_FAILURE_MARKERS:
-        if marker.lower() in log_lower:
-            converged = False
-            warning = marker
-            break
+
+    # Check 1: Does the .raw file exist and is it non-empty?
+    if not raw_file.exists() or raw_file.stat().st_size == 0:
+        converged = False
+        warning = "missing or empty .raw waveform output"
+
+    # Check 2: Check log text for convergence failure or fatal error markers
+    else:
+        log_lower = log_text.lower()
+        fatal_markers = _CONVERGENCE_FAILURE_MARKERS + [
+            "fatal error",
+            "error on line",
+            "node or model name expected",
+            "simulation aborted",
+        ]
+        for marker in fatal_markers:
+            if marker.lower() in log_lower:
+                converged = False
+                warning = marker
+                break
+
+    # Check 4: DC / SNM-specific integrity checks (Task 3)
+    if converged:
+        is_dc = False
+        net_vdd = 1.0
+        if Path(net_path).exists():
+            try:
+                content = Path(net_path).read_text(encoding="utf-8", errors="ignore")
+                for l in content.splitlines():
+                    st = l.strip().lower()
+                    if st.startswith(".dc"):
+                        is_dc = True
+                        parts = st.split()
+                        if len(parts) >= 4:
+                            try:
+                                net_vdd = float(parts[3])
+                            except ValueError:
+                                pass
+                        break
+            except Exception:
+                pass
+        if is_dc:
+            dc_ok, dc_warn = check_dc_integrity(raw_path, vdd=net_vdd)
+            if not dc_ok:
+                converged = False
+                warning = dc_warn
 
     # -----------------------------------------------------------------------
     # Extract LTspice version string from first log line
@@ -339,6 +374,79 @@ def run_simulation(
         "warning": warning,
         "ltspice_version": ltspice_version,
     }
+
+
+# ---------------------------------------------------------------------------
+# DC / SNM Simulation Integrity Validation
+# ---------------------------------------------------------------------------
+
+def check_dc_traces_integrity(
+    traces: dict,
+    vdd: float = 1.0,
+    step: float = 1e-3,
+    tol_v: float = 0.005,
+) -> tuple:
+    """
+    Validate DC trace integrity for SNM simulations.
+
+    Checks:
+      1. Point-count check: number of sweep points == round(VDD/step)+1.
+      2. Range check: all four traces within [-0.05, VDD+0.05] V.
+      3. Monotonicity check: V(Qb) non-increasing in V(Q) within tol_v (5 mV);
+         V(Q_c2) non-increasing in swept V(Qb_c2) within tol_v (5 mV).
+    """
+    import numpy as np
+
+    vq = traces.get("v(q)")
+    vqb = traces.get("v(qb)")
+    vq_c2 = traces.get("v(q_c2)")
+    vqb_c2 = traces.get("v(qb_c2)")
+
+    if any(x is None for x in (vq, vqb, vq_c2, vqb_c2)):
+        return False, "missing required snm traces"
+
+    expected_pts = round(vdd / step) + 1
+    if len(vq) != expected_pts:
+        return False, f"point count mismatch: got {len(vq)}, expected {expected_pts}"
+
+    min_v = -0.05
+    max_v = vdd + 0.05
+    for arr, name in [(vq, "v(q)"), (vqb, "v(qb)"), (vq_c2, "v(q_c2)"), (vqb_c2, "v(qb_c2)")]:
+        if np.any(arr < min_v) or np.any(arr > max_v):
+            return False, f"trace {name} voltage out of range [-0.05, {max_v}] V"
+
+    inc_a = float(np.max(vqb - np.minimum.accumulate(vqb)))
+    if inc_a > tol_v:
+        return False, "snm_nonmonotonic"
+
+    inc_b = float(np.max(vq_c2 - np.minimum.accumulate(vq_c2)))
+    if inc_b > tol_v:
+        return False, "snm_nonmonotonic"
+
+    return True, None
+
+
+def check_dc_integrity(
+    raw_path: str,
+    vdd: float = 1.0,
+    step: float = 1e-3,
+    tol_v: float = 0.005,
+) -> tuple:
+    """
+    Load raw file and validate DC integrity for SNM simulations.
+    """
+    import numpy as np
+    try:
+        from spicelib.raw.raw_read import RawRead
+        raw = RawRead(str(raw_path))
+    except Exception as e:
+        return False, f"failed to read raw file: {e}"
+
+    traces = {}
+    for tname in raw.get_trace_names():
+        traces[tname.lower()] = np.asarray(raw.get_trace(tname).get_wave(), float)
+
+    return check_dc_traces_integrity(traces, vdd=vdd, step=step, tol_v=tol_v)
 
 
 # ---------------------------------------------------------------------------

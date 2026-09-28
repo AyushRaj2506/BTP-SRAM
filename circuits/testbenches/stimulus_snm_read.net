@@ -1,0 +1,8 @@
+V4 Vdd 0 1V
+V2 WL 0 1V
+V1 BL 0 1V
+V3 BLB 0 1V
+V5 Q 0 0
+B1 Qb_c2 0 V=V(Q)
+.dc V5 0 1 1m
+.save V(Q) V(Qb) V(Q_c2) V(Qb_c2)

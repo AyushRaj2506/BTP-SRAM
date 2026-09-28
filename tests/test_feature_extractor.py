@@ -57,3 +57,13 @@ def test_read_feature_extraction(tmp_path):
     assert feats["dv_bl_strobe_mV"] > 0
     assert feats["t_sense_ps"] > 0
     assert feats["v_bump_mV"] >= 0
+
+
+def test_write_failure_returns_nan_delay(tmp_path):
+    import math
+    # Under write 1 raw simulation, target_state=0 fails (Q=1, not 0)
+    raw_path = _get_or_run_raw("write", tmp_path)
+    feats = extract_write_features(str(raw_path), target_state=0)
+    assert feats["write_pass"] is False
+    assert math.isnan(feats["t_write_ps"])
+

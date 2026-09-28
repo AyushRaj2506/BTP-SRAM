@@ -8,6 +8,7 @@ config.yaml
 *.log
 data/generated_netlists/
 data/raw_sim/
+data/sim_work/
 data/pilot_batch/raw/
 data/pilot_batch/logs/
 data/pilot_batch/extended/*/raw/

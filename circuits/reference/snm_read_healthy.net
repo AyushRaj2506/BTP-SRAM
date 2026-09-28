@@ -1,0 +1,31 @@
+* SNM butterfly deck: healthy core + snm stimulus
+M1 Qb Q Vdd Vdd SRAM_PMOS l=180nm w=360nm
+M2 Q Qb Vdd Vdd SRAM_PMOS l=180nm w=360nm
+M3 Q Qb 0 0 SRAM_NMOS l=180nm w=720nm
+M4 Qb Q 0 0 SRAM_NMOS l=180nm w=720nm
+M5 Q WL BL 0 SRAM_NMOS l=180nm w=540nm
+M6 BLB WL Qb 0 SRAM_NMOS l=180nm w=540nm
+Cq  Qb 0 1fF
+Cqb Q  0 1fF
+.model NMOS NMOS
+.model PMOS PMOS
+.model SRAM_NMOS NMOS (LEVEL=1 VTO=0.45 KP=250u GAMMA=0.4 LAMBDA=0.08 PHI=0.7 TOX=4n)
+.model SRAM_PMOS PMOS (LEVEL=1 VTO=-0.45 KP=100u GAMMA=0.4 LAMBDA=0.1 PHI=0.7 TOX=4n)
+* ---- copy 2 (same cell, nodes suffixed _c2) ----
+M1_c2 Qb_c2 Q_c2 Vdd Vdd SRAM_PMOS l=180nm w=360nm
+M2_c2 Q_c2 Qb_c2 Vdd Vdd SRAM_PMOS l=180nm w=360nm
+M3_c2 Q_c2 Qb_c2 0 0 SRAM_NMOS l=180nm w=720nm
+M4_c2 Qb_c2 Q_c2 0 0 SRAM_NMOS l=180nm w=720nm
+M5_c2 Q_c2 WL BL 0 SRAM_NMOS l=180nm w=540nm
+M6_c2 BLB WL Qb_c2 0 SRAM_NMOS l=180nm w=540nm
+Cq_c2 Qb_c2 0 1fF
+Cqb_c2 Q_c2 0 1fF
+V4 Vdd 0 1V
+V2 WL 0 1V
+V1 BL 0 1V
+V3 BLB 0 1V
+V5 Q 0 0
+B1 Qb_c2 0 V=V(Q)
+.dc V5 0 1 1m
+.save V(Q) V(Qb) V(Q_c2) V(Qb_c2)
+.end

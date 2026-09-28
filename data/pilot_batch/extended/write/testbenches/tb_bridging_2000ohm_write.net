@@ -4,7 +4,7 @@ M2 Q Qb Vdd Vdd SRAM_PMOS l=180nm w=360nm
 M3 Q Qb 0 0 SRAM_NMOS l=180nm w=720nm
 M4 Qb Q 0 0 SRAM_NMOS l=180nm w=720nm
 M5 Q WL BL 0 SRAM_NMOS l=180nm w=540nm
-M6 BLB WL Qb 0 SRAM_NMOS l=180nm w=540nm
+M6 Qb WL BLB 0 SRAM_NMOS l=180nm w=540nm
 Cq  Qb 0 1fF
 Cqb Q  0 1fF
 .model NMOS NMOS

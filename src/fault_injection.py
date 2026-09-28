@@ -69,9 +69,9 @@ def inject_resistive_open(
       - Renames M5's source field from BL  to BL_r
       - Inserts  "Rfault BL BL_r {resistance_ohms}"
 
-    For M6 (source field = Qb):
-      - Renames M6's source field from Qb  to Qb_r
-      - Inserts  "Rfault Qb Qb_r {resistance_ohms}"
+    For M6 (source field = BLB):
+      - Renames M6's source field from BLB to BLB_r
+      - Inserts  "Rfault BLB BLB_r {resistance_ohms}"
 
     Works generically for whichever of M5 / M6 is passed in.
 
@@ -93,17 +93,17 @@ def inject_resistive_open(
     str
         Path to the written faulty core file.
     """
+    tgt = transistor.upper()
     project_root = Path(__file__).parent.parent
     if output_path is None:
         output_path = (
             project_root
             / "data"
             / "generated_netlists"
-            / f"fault_resistive_open_{transistor}_{resistance_ohms}.net"
+            / f"fault_resistive_open_{tgt}_{resistance_ohms}.net"
         )
     output_path = Path(output_path)
 
-    tgt = transistor.upper()
     modified = False
     result = []
 
@@ -229,48 +229,91 @@ def inject_vth_drift(
         )
     output_path = Path(output_path)
 
-    # Original VTO magnitudes (from the validated healthy template)
-    VTO_NMOS_ORIG = 0.45
-    VTO_PMOS_ORIG = 0.45  # magnitude; sign will be re-applied below
-
-    drifted_nmos_vto = VTO_NMOS_ORIG * (1 + drift_pct / 100.0)
-    drifted_pmos_vto = -VTO_PMOS_ORIG * (1 + drift_pct / 100.0)  # more negative
+    def _extract_vto(model_line: str, default: float) -> float:
+        if not model_line:
+            return default
+        match = re.search(r"\bVTO\s*=\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)", model_line)
+        return float(match.group(1)) if match else default
 
     def _patch_vto(model_line: str, new_vto: float) -> str:
         """Replace VTO=<value> in a .model line with the drifted value."""
         return re.sub(
-            r"VTO=[-+]?\d+\.?\d*",
+            r"\bVTO\s*=\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?",
             f"VTO={new_vto:.6g}",
             model_line,
         )
 
+    # Locate nominal model lines to extract baseline VTO
+    nmos_model_line = None
+    pmos_model_line = None
+    for line in core_lines:
+        stripped = line.strip()
+        if stripped.startswith(".model SRAM_NMOS "):
+            nmos_model_line = line
+        elif stripped.startswith(".model SRAM_PMOS "):
+            pmos_model_line = line
+
+    vto_nmos_orig = _extract_vto(nmos_model_line, 0.45)
+    vto_pmos_orig = _extract_vto(pmos_model_line, -0.45)
+
+    drifted_nmos_vto = abs(vto_nmos_orig) * (1 + drift_pct / 100.0)
+    drifted_pmos_vto = -abs(vto_pmos_orig) * (1 + drift_pct / 100.0)  # more negative
+
     if target == "storage_pair":
+        nmos_storage_name = "SRAM_NMOS_STORAGE_DRIFT"
+        pmos_storage_name = "SRAM_PMOS_STORAGE_DRIFT"
+
+        if nmos_model_line is None or pmos_model_line is None:
+            raise ValueError("inject_vth_drift(storage_pair): missing SRAM_NMOS or SRAM_PMOS in core_lines.")
+
+        drifted_nmos_card = _patch_vto(
+            nmos_model_line.replace("SRAM_NMOS", nmos_storage_name, 1),
+            drifted_nmos_vto,
+        )
+        drifted_pmos_card = _patch_vto(
+            pmos_model_line.replace("SRAM_PMOS", pmos_storage_name, 1),
+            drifted_pmos_vto,
+        )
+
         result = []
         for line in core_lines:
-            stripped = line.strip()
-            if stripped.startswith(".model SRAM_NMOS "):
-                result.append(_patch_vto(line, drifted_nmos_vto))
-            elif stripped.startswith(".model SRAM_PMOS "):
-                result.append(_patch_vto(line, drifted_pmos_vto))
+            fields = _parse_m_fields(line)
+            if fields is not None:
+                m_name = fields[0].upper()
+                if m_name in ("M1", "M2"):
+                    # PMOS storage pair -> point to drifted PMOS
+                    result.append(_replace_field(line, 5, pmos_storage_name))
+                elif m_name in ("M3", "M4"):
+                    # NMOS storage pair -> point to drifted NMOS
+                    result.append(_replace_field(line, 5, nmos_storage_name))
+                else:
+                    # M5, M6 remain nominal SRAM_NMOS
+                    result.append(line)
             else:
                 result.append(line)
 
+        # Append or replace the storage drift model lines
+        has_nmos_storage = any(l.strip().startswith(f".model {nmos_storage_name}") for l in core_lines)
+        has_pmos_storage = any(l.strip().startswith(f".model {pmos_storage_name}") for l in core_lines)
+
+        final = []
+        for line in result:
+            final.append(line)
+            if not has_nmos_storage and line.strip().startswith(".model SRAM_NMOS "):
+                final.append(drifted_nmos_card)
+            if not has_pmos_storage and line.strip().startswith(".model SRAM_PMOS "):
+                final.append(drifted_pmos_card)
+        result = final
+
     else:  # target == "access"
-        # 1. Find the SRAM_NMOS .model line and create a drifted ACCESS variant
         access_model_name = "SRAM_NMOS_ACCESS_DRIFT"
-        access_model_line = None
-
-        for line in core_lines:
-            if line.strip().startswith(".model SRAM_NMOS "):
-                # Build the access-drift model by renaming and patching VTO
-                access_model_line = _patch_vto(
-                    line.replace("SRAM_NMOS", access_model_name, 1),
-                    drifted_nmos_vto,
-                )
-                break
-
-        if access_model_line is None:
+        if nmos_model_line is None:
             raise ValueError("inject_vth_drift(access): could not find '.model SRAM_NMOS' line in core_lines.")
+
+        access_model_line = _patch_vto(
+            nmos_model_line.replace("SRAM_NMOS", access_model_name, 1),
+            drifted_nmos_vto,
+        )
 
         result = []
         for line in core_lines:
@@ -281,11 +324,12 @@ def inject_vth_drift(
             else:
                 result.append(line)
 
-        # Append the new ACCESS model line after the existing SRAM_NMOS line
+        # Append or replace the ACCESS model line
+        has_access_model = any(l.strip().startswith(f".model {access_model_name}") for l in core_lines)
         final = []
         for line in result:
             final.append(line)
-            if line.strip().startswith(".model SRAM_NMOS "):
+            if not has_access_model and line.strip().startswith(".model SRAM_NMOS "):
                 final.append(access_model_line)
         result = final
 
