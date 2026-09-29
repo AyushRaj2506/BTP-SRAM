@@ -332,6 +332,18 @@ In [`reports/audit/final_comparison_table.csv`](file:///c:/Users/AYUSH/Desktop/b
 
 ---
 
+### 8.4 Explainability & Feature Attribution via TreeExplainer SHAP
+To interpret the decision boundaries of the best invariant-feature Random Forest model, we computed SHAP (SHapley Additive exPlanations) values across all 450 samples and 12 invariant features ([`scripts/run_shap_analysis.py`](file:///c:/Users/AYUSH/Desktop/btp-sram-fault-diagnosis/scripts/run_shap_analysis.py)):
+
+#### Global Feature Importance ([`reports/final_results/shap_feature_importance.csv`](file:///c:/Users/AYUSH/Desktop/btp-sram-fault-diagnosis/reports/final_results/shap_feature_importance.csv)):
+1. **`dv_bl_norm` (Mean $|SHAP| = 0.0786$):** Primary driver for Class 1 (Resistive Opens, $0.1556$) and Class 4 (Access $V_{th}$ Drift, $0.0956$), as bitline discharge is heavily governed by access pass-gate impedance.
+2. **`t_write_norm` (Mean $|SHAP| = 0.0737$):** Primary driver for Class 3 (Storage Inverter $V_{th}$ Drift, $0.1001$) and Class 1 ($0.0862$), reflecting write delay degradation.
+3. **`snm_read_norm` (Mean $|SHAP| = 0.0462$):** Strong discriminator for access transistor degradation ($0.0981$).
+4. **`iddq_norm` (Mean $|SHAP| = 0.0306$):** Captures static leakage anomalies.
+5. **`snm_hold_norm` (Mean $|SHAP| = 0.0294$):** Decouples internal storage inverter drift ($0.0506$) from access transistor drift.
+
+---
+
 ## 9. Publication Figures & Visual Assets
 
 All figures are rendered at 300 DPI and stored in [`reports/figures/`](file:///c:/Users/AYUSH/Desktop/btp-sram-fault-diagnosis/reports/figures/):
@@ -340,7 +352,9 @@ All figures are rendered at 300 DPI and stored in [`reports/figures/`](file:///c
 3. **`fig2_cross_pvt_loco_accuracy.png`:** Grouped bar chart comparing LOCO accuracy (Mean $\pm$ 1 Std Dev) between Raw and Invariant features across all 4 ML models.
 4. **`fig3_rf_pvt_corner_heatmap.png`:** Per-corner LOCO accuracy heatmap across the 15 PVT corners for Random Forest.
 5. **`fig3b_rf_grid.png`:** $3 \times 5$ temperature-voltage grid representation of Random Forest generalization accuracy.
-6. **`reports/audit/final_comparison_figure.png`:** Comparative accuracy progression across row filtering policies.
+6. **`fig4_shap_summary.png`:** Global feature importance bar chart based on mean $|SHAP|$ values across invariant features.
+7. **`fig4b_shap_class_importance.png`:** SHAP feature importance disaggregated by fault class, demonstrating the physical basis for each diagnostic prediction.
+8. **`reports/audit/final_comparison_figure.png`:** Comparative accuracy progression across row filtering policies.
 
 ---
 

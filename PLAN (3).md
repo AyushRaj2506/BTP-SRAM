@@ -278,8 +278,8 @@ Threshold values derived from the healthy-class distribution in the **training s
 - [ ] **[D]** Draft results section skeleton, pending final numbers
 
 ### Week 9 — Explainability + consolidation
-- [ ] **[D]** SHAP analysis on best invariant-feature model, if time permits (stretch goal — first to cut if behind)
-- [ ] **[C]** Finalize all result tables/figures
+- [x] **[D]** SHAP analysis on best invariant-feature model, if time permits (stretch goal — first to cut if behind)
+- [x] **[C]** Finalize all result tables/figures
 - [ ] **Whole team:** walkthrough session — every member explains SNM derivation + leave-one-corner-out logic out loud
 
 ### Week 9–10 — Writing
