@@ -1,0 +1,5 @@
+feature,raw_mean,raw_std,raw_cv_percent,norm_mean,norm_std,norm_cv_percent,cv_reduction_percent
+i,0.499,1.003,200.89,1.6,2.324,145.24,27.7
+t,61.633,8.677,14.08,1.016,0.061,5.99,57.46
+snm,0.441,0.053,11.98,1.0,0.0,0.0,100.0
+dv,235.407,74.936,31.83,1.0,0.0,0.0,100.0
