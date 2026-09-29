@@ -138,9 +138,9 @@ def run_standard_split_protocol(
     
     Validates zero sample_id leakage between train and test splits.
     """
-    nom_df = df[df["corner_id"] == "1P0V_27C"].copy()
+    nom_df = df[df["corner_id"] == "C_27C_1P0V"].copy()
     if len(nom_df) == 0:
-        raise ValueError("Nominal corner 1P0V_27C not found in dataset.")
+        raise ValueError("Nominal corner C_27C_1P0V not found in dataset.")
 
     results = []
     trained_models = {}
@@ -183,7 +183,7 @@ def run_standard_split_protocol(
                 "model": model_name,
                 "feature_set": feat_name,
                 "protocol": "standard_split",
-                "corner": "1P0V_27C",
+                "corner": "C_27C_1P0V",
                 **metrics,
             }
             results.append(record)

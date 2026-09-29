@@ -15,7 +15,7 @@ from src.ml_pipeline import (
 def mock_dataset():
     """Create a minimal synthetic dataset matching the schema across 3 corners."""
     np.random.seed(42)
-    corners = ["1P0V_27C", "0P9V_M40C", "1P1V_125C"]
+    corners = ["C_27C_1P0V", "0P9V_M40C", "1P1V_125C"]
     classes = [0, 1, 2, 3, 4]
     rows = []
     sample_counter = 1
@@ -30,7 +30,7 @@ def mock_dataset():
                 row = {
                     "sample_id": f"SRAM_F{fc}_S{s_idx}_{parts[1]}_{parts[0]}_{sample_counter:04d}",
                     "corner_id": c,
-                    "pvt_type": "in_distribution" if c == "1P0V_27C" else "ood",
+                    "pvt_type": "in_distribution" if c == "C_27C_1P0V" else "ood",
                     "vdd_v": vdd,
                     "temperature_c": temp,
                     "fault_class": fc,
@@ -90,7 +90,7 @@ def test_standard_split_protocol(mock_dataset):
     assert len(results) > 0
     for r in results:
         assert r["protocol"] == "standard_split"
-        assert r["corner"] == "1P0V_27C"
+        assert r["corner"] == "C_27C_1P0V"
         assert 0.0 <= r["accuracy"] <= 1.0
 
 
@@ -100,4 +100,4 @@ def test_leave_one_corner_out_protocol(mock_dataset):
     # 3 corners * 2 feature sets * 5 models = 30 evaluations
     assert len(results) == 3 * 2 * 5
     corners_evaluated = set(r["corner"] for r in results)
-    assert corners_evaluated == {"1P0V_27C", "0P9V_M40C", "1P1V_125C"}
+    assert corners_evaluated == {"C_27C_1P0V", "0P9V_M40C", "1P1V_125C"}
